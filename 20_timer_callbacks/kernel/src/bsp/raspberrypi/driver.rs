@@ -180,6 +180,15 @@ pub unsafe fn init() -> Result<(), &'static str> {
     Ok(())
 }
 
+/// Return a reference to GPIO driver
+pub fn get_gpio() -> &'static device_driver::GPIO {
+    // static INIT_DONE: AtomicBool = AtomicBool::new(false);
+    // if !INIT_DONE.load(Ordering::Relaxed) {
+    //     return Err("Not initialized yet.");
+    // )
+    unsafe { GPIO.assume_init_ref() }
+}
+
 /// Minimal code needed to bring up the console in QEMU (for testing only). This is often less steps
 /// than on real hardware due to QEMU's abstractions.
 #[cfg(feature = "test_build")]

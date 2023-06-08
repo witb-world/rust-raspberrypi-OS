@@ -91,6 +91,19 @@ fn kernel_main() -> ! {
     time::time_manager()
         .set_timeout_periodic(Duration::from_secs(1), Box::new(|| info!("Periodic 1 sec")));
 
+    info!("Turning on GPIO 21");
+    let gpio = bsp::driver::get_gpio();
+
+    gpio.set_output_pin(21);
+    info!("Set output GPIO 21");
+
+    info!("Spinning for 3 second");
+    gpio.set_pin_on(21);
+    time::time_manager().spin_for(Duration::from_secs(3));
+    info!("Spinning again for 1 second");
+    gpio.set_pin_off(21);
+    time::time_manager().spin_for(Duration::from_secs(1));
+
     info!("Echoing input now");
     cpu::wait_forever();
 }
