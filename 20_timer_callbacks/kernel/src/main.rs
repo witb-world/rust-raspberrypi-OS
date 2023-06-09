@@ -93,6 +93,10 @@ fn kernel_main() -> ! {
 
     info!("Turning on GPIO 21");
     let gpio = bsp::driver::get_gpio();
+    let mbr = bsp::driver::get_mbr();
+
+    let s = mbr.say_hello();
+    info!("{}", s);
 
     gpio.set_output_pin(21);
     info!("Set output GPIO 21");

@@ -23,6 +23,8 @@ use core::{
 
 static mut PL011_UART: MaybeUninit<device_driver::PL011Uart> = MaybeUninit::uninit();
 static mut GPIO: MaybeUninit<device_driver::GPIO> = MaybeUninit::uninit();
+static mut MBR: MaybeUninit<device_driver::MBR> = MaybeUninit::uninit();
+static mut EMMC: MaybeUninit<device_driver::EMMC> = MaybeUninit::uninit();
 
 #[cfg(feature = "bsp_rpi3")]
 static mut INTERRUPT_CONTROLLER: MaybeUninit<device_driver::InterruptController> =
@@ -187,6 +189,11 @@ pub fn get_gpio() -> &'static device_driver::GPIO {
     //     return Err("Not initialized yet.");
     // )
     unsafe { GPIO.assume_init_ref() }
+}
+
+/// Return a reference to MBR driver
+pub fn get_mbr() -> &'static device_driver::MBR {
+    unsafe { MBR.assume_init_ref() }
 }
 
 /// Minimal code needed to bring up the console in QEMU (for testing only). This is often less steps
