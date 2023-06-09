@@ -11,6 +11,7 @@ mod bcm;
 mod common;
 mod emmc;
 mod mbr;
+mod sd;
 
 #[cfg(feature = "bsp_rpi4")]
 pub use arm::*;
