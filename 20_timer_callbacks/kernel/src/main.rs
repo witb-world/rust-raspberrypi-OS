@@ -94,9 +94,15 @@ fn kernel_main() -> ! {
     info!("Turning on GPIO 21");
     let gpio = bsp::driver::get_gpio();
     let mbr = bsp::driver::get_mbr();
+    let emmc = bsp::driver::get_emmc();
 
     let s = mbr.say_hello();
     info!("{}", s);
+
+    info!("Attempting to INIT emmc");
+    emmc.emmc_init_card();
+    // theoretically this will produce some debug output to the console...
+    // emmc.emmc_debug_response(emmc.emmc_read_scr());
 
     gpio.set_output_pin(21);
     info!("Set output GPIO 21");

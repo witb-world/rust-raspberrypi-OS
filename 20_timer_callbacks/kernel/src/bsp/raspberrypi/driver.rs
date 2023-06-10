@@ -226,6 +226,11 @@ pub fn get_mbr() -> &'static device_driver::MBR {
     unsafe { MBR.assume_init_ref() }
 }
 
+/// Return a reference to EMMC driver
+pub fn get_emmc() -> &'static device_driver::EMMCController {
+    unsafe { EMMC_CONTROLLER.assume_init_ref() }
+}
+
 /// Minimal code needed to bring up the console in QEMU (for testing only). This is often less steps
 /// than on real hardware due to QEMU's abstractions.
 #[cfg(feature = "test_build")]
