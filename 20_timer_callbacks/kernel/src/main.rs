@@ -94,18 +94,34 @@ fn kernel_main() -> ! {
     info!("Turning on GPIO 21");
     let gpio = bsp::driver::get_gpio();
     let mbr = bsp::driver::get_mbr();
-    let emmc = bsp::driver::get_emmc();
+    // let emmc = bsp::driver::get_emmc();
 
     let s = mbr.say_hello();
     info!("{}", s);
 
     info!("Attempting to INIT emmc");
-    emmc.emmc_init_card();
+    // emmc.emmc_init_card();
     // theoretically this will produce some debug output to the console...
     // emmc.emmc_debug_response(emmc.emmc_read_scr());
 
     gpio.set_output_pin(21);
     info!("Set output GPIO 21");
+
+    let sd = bsp::driver::get_sd();
+    let init_res = sd.pi_sd_init();
+    match init_res {
+        Ok(()) => info!("Successfully initiated EMMC device"),
+        _ => info!("Something went wrong during init"),
+    };
+
+    let buf = sd.pi_sec_read(0, 1).unwrap();
+
+    info!("Got sd card MBR contents. End of block: ");
+    info!("[{}, {}]", buf[510], buf[511]);
+    // match sd_read {
+    //     Ok(buf) => info!("[{}, {}]", buf[510], buf[511]),
+    //     _ => info!("An error may have occured while trying to read from SD card."),
+    // }
 
     info!("Spinning for 3 second");
     gpio.set_pin_on(21);

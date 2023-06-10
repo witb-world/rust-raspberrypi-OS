@@ -11,7 +11,7 @@ mod bcm;
 mod common;
 mod emmc;
 mod mbr;
-// mod sd;
+mod sd;
 
 #[cfg(feature = "bsp_rpi4")]
 pub use arm::*;
@@ -21,3 +21,4 @@ pub use bcm::*;
 // #[cfg(any(feature = "bsp_rpi3", feature = "bsp_rpi4"))]
 pub use emmc::*;
 pub use mbr::*;
+pub use sd::*;

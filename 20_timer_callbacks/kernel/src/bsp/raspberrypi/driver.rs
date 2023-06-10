@@ -25,6 +25,7 @@ static mut PL011_UART: MaybeUninit<device_driver::PL011Uart> = MaybeUninit::unin
 static mut GPIO: MaybeUninit<device_driver::GPIO> = MaybeUninit::uninit();
 static mut MBR: MaybeUninit<device_driver::MBR> = MaybeUninit::uninit();
 static mut EMMC_CONTROLLER: MaybeUninit<device_driver::EMMCController> = MaybeUninit::uninit();
+static mut SD: MaybeUninit<device_driver::SD> = MaybeUninit::uninit();
 
 #[cfg(feature = "bsp_rpi3")]
 static mut INTERRUPT_CONTROLLER: MaybeUninit<device_driver::InterruptController> =
@@ -78,13 +79,24 @@ unsafe fn instantiate_emmc() -> Result<(), &'static str> {
     let virt_addr =
         memory::mmu::kernel_map_mmio(device_driver::EMMCController::COMPATIBLE, &mmio_descriptor)?;
     EMMC_CONTROLLER.write(device_driver::EMMCController::new(virt_addr));
-
+    // EMMC_CONTROLLER
     Ok(())
 }
 
 /// This must be called only after successful init of EMMC driver
 unsafe fn post_init_emmc() -> Result<(), &'static str> {
     EMMC_CONTROLLER.assume_init_ref();
+    Ok(())
+}
+
+unsafe fn instantiate_sd() -> Result<(), &'static str> {
+    // let mmio_descriptor
+    SD.write(device_driver::SD::new());
+    Ok(())
+}
+
+unsafe fn post_init_sd() -> Result<(), &'static str> {
+    SD.assume_init_ref();
     Ok(())
 }
 
@@ -174,6 +186,14 @@ unsafe fn driver_emmc_controller() -> Result<(), &'static str> {
     Ok(())
 }
 
+unsafe fn driver_sd() -> Result<(), &'static str> {
+    instantiate_sd()?;
+    let sd_descriptor =
+        generic_driver::DeviceDriverDescriptor::new(SD.assume_init_ref(), Some(post_init_sd), None);
+    generic_driver::driver_manager().register_driver(sd_descriptor);
+    Ok(())
+}
+
 /// Function needs to ensure that driver registration happens only after correct instantiation.
 unsafe fn driver_interrupt_controller() -> Result<(), &'static str> {
     instantiate_interrupt_controller()?;
@@ -207,6 +227,7 @@ pub unsafe fn init() -> Result<(), &'static str> {
     driver_gpio()?;
     driver_interrupt_controller()?;
     driver_emmc_controller()?;
+    driver_sd()?;
 
     INIT_DONE.store(true, Ordering::Relaxed);
     Ok(())
@@ -229,6 +250,11 @@ pub fn get_mbr() -> &'static device_driver::MBR {
 /// Return a reference to EMMC driver
 pub fn get_emmc() -> &'static device_driver::EMMCController {
     unsafe { EMMC_CONTROLLER.assume_init_ref() }
+}
+
+/// Return a reference to SD driver
+pub fn get_sd() -> &'static device_driver::SD {
+    unsafe { SD.assume_init_ref() }
 }
 
 /// Minimal code needed to bring up the console in QEMU (for testing only). This is often less steps

@@ -2281,7 +2281,7 @@ impl EMMCController {
     pub fn emmc_reset_card(&self) -> SdResult {
         let mut td = 0; // Zero time difference
         let mut start_time = 0; // Zero start time
-
+        info!("About to try to write to control register.");
         self.registers.EMMC_CONTROL1.write(CONTROL1::SRST_HC.val(1)); // Reset the complete host circuit
         timer_wait_micro(10); // Wait 10 microseconds
 
@@ -2410,10 +2410,13 @@ impl EMMCController {
         mut buffer: &mut [u8],
         write: bool,
     ) -> SdResult {
+        info!("In transfer blocks");
         if unsafe { EMMC_CARD.emmc_card_type == SdCardType::EMMC_TYPE_UNKNOWN } {
+            info!("Card type unknown");
             return SdResult::EMMC_NO_RESP;
         } // If card not known return error
         if self.emmc_wait_for_data() != SdResult::EMMC_OK {
+            info!("timeout");
             return SdResult::EMMC_TIMEOUT;
         } // Ensure any data operation has completed before doing the transfer.
 
@@ -2422,6 +2425,7 @@ impl EMMCController {
 
         let transfer_cmd = if write {
             if num_blocks == 1 {
+                info!("setting cmd to write_single");
                 SdCardCommands::WRITE_SINGLE
             } else {
                 SdCardCommands::WRITE_MULTI
@@ -2493,6 +2497,7 @@ impl EMMCController {
         let mut blocks_done = 0;
         let mut buffer_addr = buffer.as_ptr() as usize;
         while (blocks_done < num_blocks) {
+            info!("Starting transfer all");
             // Wait for ready interrupt for the next block.
             resp = self.emmc_wait_for_interrupt(ready_int as u32);
             if resp != SdResult::EMMC_OK {
@@ -2505,6 +2510,7 @@ impl EMMCController {
             // Handle non-word-aligned buffers byte-by-byte.
             // Note: the entire block is sent without looking at status registers.
             if (buffer_addr & 0x03) != 0 {
+                info!("Handling non-word-aligned buffer");
                 for i in (0..512).step_by(4) {
                     if (write) {
                         let mut data = (buffer[i]) as u32;
@@ -2525,6 +2531,7 @@ impl EMMCController {
             // Handle word-aligned buffers more efficiently.
             // Hopefully people smart enough to provide aligned data buffer
             else {
+                info!("Handling word-aligned buffer");
                 for i in (0..512).step_by(4) {
                     if (write) {
                         let bytes = u32::from_le_bytes(buffer[i..i + 4].try_into().unwrap());
@@ -2538,6 +2545,7 @@ impl EMMCController {
 
             if blocks_done + 1 == num_blocks {
                 // we're done transferring all blocks
+                info!("Done transferring all blocks!");
                 break; // break here or we'll run into an `out of bounds` error.
             } else {
                 buffer = &mut buffer[512 as usize..];
@@ -2687,6 +2695,7 @@ impl EMMCController {
     /// - EMMC_OK indicates the current card successfully initialized.
     /// - !EMMC_OK if card initialize failed with code identifying error.
     pub fn emmc_init_card(&self) -> SdResult {
+        info!("Initializing card!");
         let mut resp = self.emmc_reset_card(); // Reset the card.
 
         if (resp != SdResult::EMMC_OK) {
@@ -2712,6 +2721,7 @@ impl EMMCController {
                     } else {
                         EMMC_CARD.emmc_card_type = SdCardType::EMMC_TYPE_2_SC;
                     }
+                    info!("GOT EMMC card type: {:?}", EMMC_CARD.emmc_card_type);
                 }
             }
             SdResult::EMMC_BUSY => return resp,
