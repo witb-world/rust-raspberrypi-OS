@@ -2757,11 +2757,14 @@ impl EMMCController {
             return self.emmc_debug_response(resp);
         }
 
+        info!("About to check clock");
         // At this point, set the clock to full speed
         resp = self.emmc_set_clock2(FREQ_NORMAL as u32);
         if (resp != SdResult::EMMC_OK) {
             return self.emmc_debug_response(resp);
         }
+
+        info!("About to check card_select");
 
         // Send CARD_SELECT  (CMD7)
         // TODO: Check card_is_locked status in the R1 response from CMD7 [bit 25], if so, use CMD42
@@ -2771,6 +2774,8 @@ impl EMMCController {
         if (resp != SdResult::EMMC_OK) {
             return self.emmc_debug_response(resp);
         }
+
+        info!("About to get SCR");
 
         // Get the SCR as well.
         // Need to do this before sending ACMD6 so that allowed bus widths are known.
@@ -2792,6 +2797,7 @@ impl EMMCController {
                 info!("Unsupported bus width, we'll default to using a `1-bit` bus")
             }
         }
+        info!("About to send bus width");
         // Send APP_SET_BUS_WIDTH (ACMD6)
         // If supported, set 4 bit bus width and update the CONTROL0 register.
         if let Some(SCR::BUS_WIDTH::Value::BUS_WIDTH_1_4) =
@@ -2808,12 +2814,14 @@ impl EMMCController {
             info!("EMMC: Bus width set to 4");
         };
 
+        info!("About to set blocklen");
         // Send SET_BLOCKLEN (CMD16)
         resp = self.emmc_send_command_a(SdCardCommands::SET_BLOCKLEN, 512);
         if (resp != SdResult::EMMC_OK) {
             return self.emmc_debug_response(resp);
         }
 
+        info!("Almost done! Try to print out CID");
         // Print out the CID having got this far.
         unsafe {
             let mut serial = EMMC_CARD.cid.cid2.read(CID_RAW32_2::SerialNumHi);
