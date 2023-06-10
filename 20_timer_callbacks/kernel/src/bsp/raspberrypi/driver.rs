@@ -24,7 +24,7 @@ use core::{
 static mut PL011_UART: MaybeUninit<device_driver::PL011Uart> = MaybeUninit::uninit();
 static mut GPIO: MaybeUninit<device_driver::GPIO> = MaybeUninit::uninit();
 static mut MBR: MaybeUninit<device_driver::MBR> = MaybeUninit::uninit();
-static mut EMMC: MaybeUninit<device_driver::EMMC> = MaybeUninit::uninit();
+static mut EMMC_CONTROLLER: MaybeUninit<device_driver::EMMCController> = MaybeUninit::uninit();
 
 #[cfg(feature = "bsp_rpi3")]
 static mut INTERRUPT_CONTROLLER: MaybeUninit<device_driver::InterruptController> =
@@ -69,6 +69,22 @@ unsafe fn instantiate_gpio() -> Result<(), &'static str> {
 /// This must be called only after successful init of the GPIO driver.
 unsafe fn post_init_gpio() -> Result<(), &'static str> {
     GPIO.assume_init_ref().map_pl011_uart();
+    Ok(())
+}
+
+/// This must be called only after successful init of the memory subsystem.
+unsafe fn instantiate_emmc() -> Result<(), &'static str> {
+    let mmio_descriptor = MMIODescriptor::new(mmio::EMMC_START, mmio::EMMC_SIZE);
+    let virt_addr =
+        memory::mmu::kernel_map_mmio(device_driver::EMMCController::COMPATIBLE, &mmio_descriptor)?;
+    EMMC_CONTROLLER.write(device_driver::EMMCController::new(virt_addr));
+
+    Ok(())
+}
+
+/// This must be called only after successful init of EMMC driver
+unsafe fn post_init_emmc() -> Result<(), &'static str> {
+    EMMC_CONTROLLER.assume_init_ref();
     Ok(())
 }
 
@@ -146,6 +162,19 @@ unsafe fn driver_gpio() -> Result<(), &'static str> {
 }
 
 /// Function needs to ensure that driver registration happens only after correct instantiation.
+unsafe fn driver_emmc_controller() -> Result<(), &'static str> {
+    instantiate_emmc()?;
+
+    let emmc_descriptor = generic_driver::DeviceDriverDescriptor::new(
+        EMMC_CONTROLLER.assume_init_ref(),
+        Some(post_init_emmc),
+        None,
+    );
+    generic_driver::driver_manager().register_driver(emmc_descriptor);
+    Ok(())
+}
+
+/// Function needs to ensure that driver registration happens only after correct instantiation.
 unsafe fn driver_interrupt_controller() -> Result<(), &'static str> {
     instantiate_interrupt_controller()?;
 
@@ -177,6 +206,7 @@ pub unsafe fn init() -> Result<(), &'static str> {
     driver_uart()?;
     driver_gpio()?;
     driver_interrupt_controller()?;
+    driver_emmc_controller()?;
 
     INIT_DONE.store(true, Ordering::Relaxed);
     Ok(())

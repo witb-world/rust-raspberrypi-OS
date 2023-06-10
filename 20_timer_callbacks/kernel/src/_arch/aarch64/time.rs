@@ -145,6 +145,12 @@ pub fn uptime() -> Duration {
     read_cntpct().into()
 }
 
+/// Get current time/uptime in raw cycles
+pub fn get_sys_tick_count() -> u64 {
+    let current_count = CNTPCT_EL0.get();
+    current_count
+}
+
 /// Spin for a given duration.
 pub fn spin_for(duration: Duration) {
     let curr_counter_value = read_cntpct();

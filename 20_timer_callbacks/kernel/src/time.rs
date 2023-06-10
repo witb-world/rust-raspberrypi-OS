@@ -118,6 +118,11 @@ impl TimeManager {
         }
     }
 
+    /// get current raw clock time / uptime
+    pub fn get_sys_tick_count(&self) -> u64 {
+        arch_time::get_sys_tick_count()
+    }
+
     /// The timer's resolution.
     pub fn resolution(&self) -> Duration {
         arch_time::resolution()

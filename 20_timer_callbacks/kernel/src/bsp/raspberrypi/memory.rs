@@ -124,6 +124,11 @@ pub(super) mod map {
         pub const PL011_UART_START:    Address<Physical> = Address::new(0x3F20_1000);
         pub const PL011_UART_SIZE:     usize             =              0x48;
 
+        // see BCM2835 pg 66: registers start at offset 0x7E300000. Map down to 0x3F30_0000
+        pub const EMMC_START:       Address<Physical> = Address::new(0x3F30_0000);
+        // see BCM 2835 pg 67: registers end at offset 0xFC
+        pub const EMMC_SIZE:        usize             =              0x100;
+
         pub const LOCAL_IC_START:      Address<Physical> = Address::new(0x4000_0000);
         pub const LOCAL_IC_SIZE:       usize             =              0x100;
 
@@ -146,6 +151,11 @@ pub(super) mod map {
 
         pub const GICC_START:       Address<Physical> = Address::new(0xFF84_2000);
         pub const GICC_SIZE:        usize             =              0x14;
+
+        // see BCM2835 pg 66: registers start at offset 0x7E300000. Map up to 0xFE30_0000
+        pub const EMMC_START:       Address<Physical> = Address::new(0xFE30_0000);
+        // see BCM 2835 pg 67: registers end at offset 0xFC
+        pub const EMMC_SIZE:        usize             =              0x100;
 
         pub const END:              Address<Physical> = Address::new(0xFF85_0000);
     }
