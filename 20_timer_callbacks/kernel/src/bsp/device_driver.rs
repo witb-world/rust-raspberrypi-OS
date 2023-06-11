@@ -10,6 +10,7 @@ mod arm;
 mod bcm;
 mod common;
 mod emmc;
+mod fat32;
 mod mbr;
 mod sd;
 
@@ -20,5 +21,6 @@ pub use bcm::*;
 
 // #[cfg(any(feature = "bsp_rpi3", feature = "bsp_rpi4"))]
 pub use emmc::*;
+pub use fat32::*;
 pub use mbr::*;
 pub use sd::*;

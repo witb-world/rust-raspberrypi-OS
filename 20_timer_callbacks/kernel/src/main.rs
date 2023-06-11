@@ -122,8 +122,11 @@ fn kernel_main() -> ! {
         part.mbr_get_nsectors(),
         part.mbr_get_parttype()
     );
+    info!("Full partition: {}", part);
 
-    info!("MBR sigval: {}", mbr.mbr_get_sigval());
+    info!("MBR sigval: {:x}", mbr.mbr_get_sigval());
+
+    info!("MBR check output: {}", mbr.mbr_check());
 
     // let buf = sd.pi_sec_read(0, 1).unwrap();
 
