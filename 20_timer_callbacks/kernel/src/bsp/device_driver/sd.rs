@@ -1,6 +1,6 @@
 // Note: use `emmc_transfer_blocks` for read/write.
 
-// use alloc::vec::Vec;
+use alloc::vec::Vec;
 
 use super::EMMCController;
 use crate::{
@@ -55,17 +55,14 @@ impl SDInner {
         Ok(())
     }
 
-    fn emmc_read_sectors(&mut self, lba: u32, nsec: u32) -> Result<[u8; 512], &'static str> {
+    fn emmc_read_sectors(&mut self, lba: u32, nsec: u32) -> Result<Vec<u8>, &'static str> {
         // may just have to allocate then read in
         // this will require calculating size from nsec.
-
-        // probhably an issue with using vec type here.
-
-        let mut buffer: [u8; 512] = [0; 512];
+        let mut buffer: Vec<u8> = Vec::new();
+        let n_us = usize::try_from(nsec).unwrap();
+        buffer.resize(n_us * 512, 0);
         self.emmc
             .emmc_transfer_blocks(lba, nsec, &mut buffer, false);
-        // println!("About to print end of buffer");
-        // println!("{}", buffer[510]);
         Ok(buffer)
     }
 }
@@ -97,7 +94,7 @@ impl SD {
     // }
 
     /// read `nsec` of sectors starting at `lba`, return buf
-    pub fn pi_sec_read(&self, lba: u32, nsec: u32) -> Result<[u8; 512], &'static str> {
+    pub fn pi_sec_read(&self, lba: u32, nsec: u32) -> Result<Vec<u8>, &'static str> {
         let buffer = self.inner.lock(|inner| inner.emmc_read_sectors(lba, nsec));
         buffer
     }

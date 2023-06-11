@@ -100,6 +100,16 @@ unsafe fn post_init_sd() -> Result<(), &'static str> {
     Ok(())
 }
 
+unsafe fn instantiate_mbr() -> Result<(), &'static str> {
+    MBR.write(device_driver::MBR::new()?);
+    Ok(())
+}
+
+unsafe fn post_init_mbr() -> Result<(), &'static str> {
+    MBR.assume_init_ref();
+    Ok(())
+}
+
 /// This must be called only after successful init of the memory subsystem.
 #[cfg(feature = "bsp_rpi3")]
 unsafe fn instantiate_interrupt_controller() -> Result<(), &'static str> {
@@ -194,6 +204,17 @@ unsafe fn driver_sd() -> Result<(), &'static str> {
     Ok(())
 }
 
+unsafe fn driver_mbr() -> Result<(), &'static str> {
+    instantiate_mbr()?;
+    let mbr_descriptor = generic_driver::DeviceDriverDescriptor::new(
+        MBR.assume_init_ref(),
+        Some(post_init_mbr),
+        None,
+    );
+    generic_driver::driver_manager().register_driver(mbr_descriptor);
+    Ok(())
+}
+
 /// Function needs to ensure that driver registration happens only after correct instantiation.
 unsafe fn driver_interrupt_controller() -> Result<(), &'static str> {
     instantiate_interrupt_controller()?;
@@ -228,6 +249,7 @@ pub unsafe fn init() -> Result<(), &'static str> {
     driver_interrupt_controller()?;
     driver_emmc_controller()?;
     driver_sd()?;
+    driver_mbr()?;
 
     INIT_DONE.store(true, Ordering::Relaxed);
     Ok(())
@@ -242,11 +264,6 @@ pub fn get_gpio() -> &'static device_driver::GPIO {
     unsafe { GPIO.assume_init_ref() }
 }
 
-/// Return a reference to MBR driver
-pub fn get_mbr() -> &'static device_driver::MBR {
-    unsafe { MBR.assume_init_ref() }
-}
-
 /// Return a reference to EMMC driver
 pub fn get_emmc() -> &'static device_driver::EMMCController {
     unsafe { EMMC_CONTROLLER.assume_init_ref() }
@@ -255,6 +272,11 @@ pub fn get_emmc() -> &'static device_driver::EMMCController {
 /// Return a reference to SD driver
 pub fn get_sd() -> &'static device_driver::SD {
     unsafe { SD.assume_init_ref() }
+}
+
+/// Return a reference to MBR driver
+pub fn get_mbr() -> &'static device_driver::MBR {
+    unsafe { MBR.assume_init_ref() }
 }
 
 /// Minimal code needed to bring up the console in QEMU (for testing only). This is often less steps

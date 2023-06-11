@@ -107,17 +107,28 @@ fn kernel_main() -> ! {
     gpio.set_output_pin(21);
     info!("Set output GPIO 21");
 
-    let sd = bsp::driver::get_sd();
-    let init_res = sd.pi_sd_init();
-    match init_res {
-        Ok(()) => info!("Successfully initiated EMMC device"),
-        _ => info!("Something went wrong during init"),
-    };
+    // let sd = bsp::driver::get_sd();
+    // let init_res = sd.pi_sd_init();
+    // match init_res {
+    //     Ok(()) => info!("Successfully initiated EMMC device"),
+    //     _ => info!("Something went wrong during init"),
+    // };
 
-    let buf = sd.pi_sec_read(0, 1).unwrap();
+    let part = mbr.mbr_get_partition(1);
 
-    info!("Got sd card MBR contents. End of block: ");
-    info!("[{}, {}]", buf[510], buf[511]);
+    info!("{}", part.mbr_partition_string());
+    info!(
+        "More partition data: nsec: {}\tpart_type: {}",
+        part.mbr_get_nsectors(),
+        part.mbr_get_parttype()
+    );
+
+    info!("MBR sigval: {}", mbr.mbr_get_sigval());
+
+    // let buf = sd.pi_sec_read(0, 1).unwrap();
+
+    // info!("Got sd card MBR contents. End of block: ");
+    // info!("[{}, {}]", buf[510], buf[511]);
     // match sd_read {
     //     Ok(buf) => info!("[{}, {}]", buf[510], buf[511]),
     //     _ => info!("An error may have occured while trying to read from SD card."),
