@@ -117,6 +117,12 @@ fn kernel_main() -> ! {
     fat32.fat32_read_fat();
     info!("Read successful!");
 
+    let d = fat32.fat32_get_root();
+
+    let directory = fat32.fat32_read_dir(d);
+
+    info!("Directory info: {:#?}", directory);
+
     info!("Spinning for 3 second");
     gpio.set_pin_on(21);
     time::time_manager().spin_for(Duration::from_secs(3));
