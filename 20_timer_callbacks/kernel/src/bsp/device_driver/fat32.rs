@@ -410,18 +410,6 @@ impl Fat32Inner {
             data = [data.as_slice(), new_data_slice].concat();
             cluster = self.get_next_cluster_val(cluster);
         }
-
-        // if data.len() == 0 {
-        //     let new_data = self
-        //         .sd
-        //         .pi_sec_read(self.cluster_to_lba(cluster), read_size)
-        //         .unwrap();
-        //     let new_data_slice = new_data.as_slice();
-
-        //     data = [data.as_slice(), new_data_slice].concat();
-        //     // cluster = self.get_next_cluster_val(cluster);
-        // }
-
         data
     }
 
@@ -460,7 +448,7 @@ impl Fat32Inner {
         let mut dirents: Vec<Dirent> = Vec::new();
 
         let mut num_valid_dirents: u32 = 0;
-        let mut j: usize = 0;
+        // let mut j: usize = 0;
         println!("Number of dirents: {}", fat32_dirent_vec.len());
         for i in 0..fat32_dirent_vec.len() {
             // add to dirents
@@ -473,11 +461,7 @@ impl Fat32Inner {
             };
 
             num_valid_dirents += 1;
-            // then convert dirent after bounds checking
-            if dirents.len() > j {
-                dirents[j] = this_entry.dirent_convert();
-                j += 1;
-            }
+            dirents.push(this_entry.dirent_convert());
         }
 
         Directory {
