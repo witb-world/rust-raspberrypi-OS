@@ -5,14 +5,20 @@ use crate::{
     },
     driver,
     exception::asynchronous::IRQNumber,
-    synchronization,
+    // synchronization,
     synchronization::IRQSafeNullLock,
 };
 use alloc::{string::String, vec::Vec};
+use postcard::from_bytes;
+use serde::Deserialize;
+#[allow(dead_code)]
 
 struct File {
     data: Vec<u8>,
 }
+
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 
 struct BootSector {
     asm_code: [u8; 3],
@@ -42,10 +48,27 @@ struct BootSector {
     serial_num: u32,
     volume_label: [u8; 11],
     fs_type: [u8; 8],
-    _ignore: [u8; 420],
+    // Unfortunately serde::deserialize doesn't allow for arrays longer than this...
+    _ignore: [u8; 32],
+    _ignore1: [u8; 32],
+    _ignore2: [u8; 32],
+    _ignore3: [u8; 32],
+    _ignore4: [u8; 32],
+    _ignore5: [u8; 32],
+    _ignore6: [u8; 32],
+    _ignore7: [u8; 32],
+    _ignore8: [u8; 32],
+    _ignore9: [u8; 32],
+    _ignore_a: [u8; 32],
+    _ignore_b: [u8; 32],
+    _ignore_c: [u8; 32],
+    _ignore_d: [u8; 4],
     sig: u16,
 }
-const TestChecker: [u8; 512] = [0; core::mem::size_of::<BootSector>()];
+// a hacky static-assert for size of BootSector struct
+#[allow(dead_code)]
+const TEST_CHECKER: [u8; 512] = [0; core::mem::size_of::<BootSector>()];
+#[allow(dead_code)]
 
 struct Dirent {
     // may want to enforce that these two fields max out at 16 bytes...
@@ -56,11 +79,14 @@ struct Dirent {
     nbytes: u32,
     is_dir_p: bool,
 }
+#[allow(dead_code)]
 
 struct Directory {
     dirents: Vec<Dirent>,
     n_dirents: u32,
 }
+#[allow(dead_code)]
+
 struct Fat32Inner {
     lba_start: u32,
     fat_begin_lba: u32,
@@ -71,27 +97,40 @@ struct Fat32Inner {
     fat: Vec<u8>,
     n_entries: u32,
 
-    sd: SD,
+    sd: &'static SD,
 }
 
 //--------------------------------------------------------------------------------------------------
 // Private Code
 //--------------------------------------------------------------------------------------------------
-use bincode::deserialize;
+// use bincode::deserialize;
+#[allow(dead_code)]
 
 impl Fat32Inner {
-    pub fn new(partition: PartitionEntry, sd: SD) -> Self {
+    pub fn new(partition: PartitionEntry, sd: &'static SD) -> Self {
         // need to use lba_start of partition to read in boot_sector.
-        let boot_sector_vec = sd.pi_sec_read(partition.mbr_get_lba_start(), 1)?;
+        let boot_sector_vec = sd.pi_sec_read(partition.mbr_get_lba_start(), 1).unwrap();
         // then need to "memcpy" this vec into BootSector type. Use `bincode` crate.
 
-        let boot_sec: BootSector = deserialize(&boot_sector_vec).unwrap();
-        Self {}
+        // let boot_sec: BootSector = deserialize(&boot_sector_vec).unwrap();
+        let boot_sec: BootSector = from_bytes(&boot_sector_vec).unwrap();
+        Self {
+            lba_start: partition.mbr_get_lba_start(),
+            fat_begin_lba: 2,
+            clusters_begin_lba: 2
+                + (u32::try_from(boot_sec.nfats).unwrap()) * boot_sec.nsec_per_fat,
+            sectors_per_cluster: u32::try_from(boot_sec.sec_per_cluster).unwrap(),
+            root_dir_first_cluster: boot_sec.first_cluster,
+            n_entries: boot_sec.nsec_per_fat * 512 / 4,
+            sd: &sd,
+            fat: Vec::new(),
+        }
     }
 }
 //--------------------------------------------------------------------------------------------------
 // Public Definitions
 //--------------------------------------------------------------------------------------------------
+#[allow(dead_code)]
 pub struct Fat32 {
     inner: IRQSafeNullLock<Fat32Inner>,
 }
@@ -99,14 +138,16 @@ pub struct Fat32 {
 //--------------------------------------------------------------------------------------------------
 // Public Code
 //--------------------------------------------------------------------------------------------------
+
+#[allow(dead_code)]
 impl Fat32 {
     pub unsafe fn new() -> Result<Self, &'static str> {
         let sd_driver = get_sd();
         let mbr = get_mbr();
-        sd_driver.pi_sd_init();
+        sd_driver.pi_sd_init()?;
         let first_partition = mbr.mbr_get_partition(1);
         Ok(Self {
-            inner: IRQSafeNullLock::new(Fat32Inner::new(first_partition)),
+            inner: IRQSafeNullLock::new(Fat32Inner::new(first_partition, sd_driver)),
         })
     }
 
@@ -116,7 +157,7 @@ impl Fat32 {
 //------------------------------------------------------------------------------
 // OS Interface Code
 //------------------------------------------------------------------------------
-use synchronization::interface::Mutex;
+// use synchronization::interface::Mutex;
 
 use super::SD;
 
