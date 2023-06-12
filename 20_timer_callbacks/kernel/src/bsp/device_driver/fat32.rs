@@ -112,8 +112,8 @@ struct Fat32Inner {
 // use bincode::deserialize;
 
 // unline the struct above, we won't fill in `ignore` fields.
+#[derive(Debug)]
 #[allow(dead_code)]
-
 pub struct FSInfo {
     sig1: u32,
     sig2: u32,
@@ -124,6 +124,7 @@ pub struct FSInfo {
 
 impl FSInfo {
     pub fn new(info_sector: Vec<u8>) -> Self {
+        println!("Info sector [488]: {}", info_sector[488]);
         Self {
             sig1: sl_to_u32(&info_sector[0..4]),
             sig2: sl_to_u32(&info_sector[484..488]),
@@ -137,7 +138,7 @@ impl FSInfo {
 pub fn arr_to_u32(arr: [u8; 4]) -> u32 {
     let mut res = 0;
     for i in 0..4 {
-        res += u32::try_from(arr[i]).unwrap() << (32 - (i * 8));
+        res += u32::try_from(arr[i]).unwrap() << (i * 8);
     }
     res
 }
@@ -145,7 +146,7 @@ pub fn arr_to_u32(arr: [u8; 4]) -> u32 {
 pub fn sl_to_u32(sl: &[u8]) -> u32 {
     let mut res = 0;
     for i in 0..4 {
-        res += u32::try_from(sl[i]).unwrap() << (32 - (i * 8));
+        res += u32::try_from(sl[i]).unwrap() << (i * 8);
     }
     res
 }
@@ -153,7 +154,7 @@ pub fn sl_to_u32(sl: &[u8]) -> u32 {
 pub fn arr_to_u16(arr: [u8; 2]) -> u16 {
     let mut res = 0;
     for i in 0..2 {
-        res += u16::try_from(arr[i]).unwrap() << (16 - (i * 8));
+        res += u16::try_from(arr[i]).unwrap() << (i * 8);
     }
     res
 }
@@ -162,7 +163,9 @@ impl Fat32Inner {
     pub fn new(partition: PartitionEntry, sd: &'static SD) -> Self {
         // need to use lba_start of partition to read in boot_sector.
         let lba_start = partition.mbr_get_lba_start();
-        let boot_sector_vec = sd.pi_sec_read(lba_start, 1).unwrap();
+        let mut boot_sector_vec: Vec<u8> = Vec::new();
+        boot_sector_vec.resize(512, 0);
+        boot_sector_vec = sd.pi_sec_read(lba_start, 1).unwrap();
         // then need to "memcpy" this vec into BootSector type. Use `bincode` crate.
         println!(
             "BootSector[10..13]:\t{}, {}, {}, {}",
@@ -174,20 +177,22 @@ impl Fat32Inner {
         let boot_sec: BootSector = from_bytes(&boot_sector_arr).unwrap();
         println!("BootSector: {:#?}", boot_sec);
         let if_sec_num = u32::try_from(arr_to_u16(boot_sec.info_sec_num)).unwrap();
+        println!("Got Info sector number: {}", if_sec_num);
         let info = FSInfo::new(sd.pi_sec_read(if_sec_num, 1).unwrap());
         // println!("Boot_sec: bytes_per_sec: {}", boot_sec.bytes_per_sec);
 
+        println!("FSInfo: {:#?}", info);
         let fat_begin_lba =
             lba_start + u32::try_from(arr_to_u16(boot_sec.reserved_area_nsec)).unwrap();
         let cluster_begin_lba = fat_begin_lba
             + u32::try_from(boot_sec.nfats).unwrap() * arr_to_u32(boot_sec.nsec_per_fat);
         let n_entries = arr_to_u32(boot_sec.nsec_per_fat) * 512 / 4;
 
-        let mut fat: Vec<u8> = Vec::new();
-        fat.resize(usize::try_from(n_entries).unwrap() * 4, 0);
-        fat = sd
-            .pi_sec_read(fat_begin_lba, arr_to_u32(boot_sec.nsec_per_fat))
-            .unwrap();
+        let fat: Vec<u8> = Vec::new();
+        // fat.resize(usize::try_from(n_entries).unwrap() * 4, 0);
+        // fat = sd
+        //     .pi_sec_read(fat_begin_lba, arr_to_u32(boot_sec.nsec_per_fat))
+        //     .unwrap();
 
         Self {
             lba_start: lba_start,
@@ -198,9 +203,27 @@ impl Fat32Inner {
             n_entries: n_entries,
             sd: &sd,
             fat: fat,
-            boot_sec,
-            info,
+            boot_sec: boot_sec,
+            info: info,
         }
+    }
+
+    /// Read in FAT table
+    #[allow(dead_code)]
+    pub fn fat32_read_fat(&mut self) {
+        println!(
+            "Reading FAT, from {} with {} sectors.",
+            self.fat_begin_lba,
+            arr_to_u32(self.boot_sec.nsec_per_fat)
+        );
+        let fat = self
+            .sd
+            .pi_sec_read(self.fat_begin_lba, arr_to_u32(self.boot_sec.nsec_per_fat));
+
+        match fat {
+            Ok(fat) => self.fat = fat,
+            _ => panic!("Something went wrong while reading FAT"),
+        };
     }
 
     pub fn fat32_volume_id_check(&self) {
@@ -259,6 +282,10 @@ impl Fat32 {
 
     pub fn fat32_vol_id_check(&self) {
         self.inner.lock(|inner| inner.fat32_volume_id_check())
+    }
+
+    pub fn fat32_read_fat(&self) {
+        self.inner.lock(|inner| inner.fat32_read_fat())
     }
 }
 

@@ -107,40 +107,15 @@ fn kernel_main() -> ! {
     gpio.set_output_pin(21);
     info!("Set output GPIO 21");
 
-    // let sd = bsp::driver::get_sd();
-    // let init_res = sd.pi_sd_init();
-    // match init_res {
-    //     Ok(()) => info!("Successfully initiated EMMC device"),
-    //     _ => info!("Something went wrong during init"),
-    // };
-
-    // let part = mbr.mbr_get_partition(1);
-
-    // info!("{}", part.mbr_partition_string());
-    // info!(
-    //     "More partition data: nsec: {}\tpart_type: {}",
-    //     part.mbr_get_nsectors(),
-    //     part.mbr_get_parttype()
-    // );
-    // info!("Full partition: {}", part);
-
-    // info!("MBR sigval: {:x}", mbr.mbr_get_sigval());
-
-    // info!("MBR check output: {}", mbr.mbr_check());
-
     let fat32 = bsp::driver::get_fat32();
 
     info!("Checking Fat32 vol");
     fat32.fat32_vol_id_check();
     info!("Check succeeded!");
-    // let buf = sd.pi_sec_read(0, 1).unwrap();
 
-    // info!("Got sd card MBR contents. End of block: ");
-    // info!("[{}, {}]", buf[510], buf[511]);
-    // match sd_read {
-    //     Ok(buf) => info!("[{}, {}]", buf[510], buf[511]),
-    //     _ => info!("An error may have occured while trying to read from SD card."),
-    // }
+    info!("Trying to read in FAT table");
+    fat32.fat32_read_fat();
+    info!("Read successful!");
 
     info!("Spinning for 3 second");
     gpio.set_pin_on(21);

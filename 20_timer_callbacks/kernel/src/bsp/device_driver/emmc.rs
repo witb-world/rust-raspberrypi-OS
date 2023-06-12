@@ -2497,7 +2497,7 @@ impl EMMCController {
         let mut blocks_done = 0;
         let mut buffer_addr = buffer.as_ptr() as usize;
         while (blocks_done < num_blocks) {
-            info!("Starting transfer all");
+            // info!("Starting transfer all");
             // Wait for ready interrupt for the next block.
             resp = self.emmc_wait_for_interrupt(ready_int as u32);
             if resp != SdResult::EMMC_OK {
@@ -2531,7 +2531,7 @@ impl EMMCController {
             // Handle word-aligned buffers more efficiently.
             // Hopefully people smart enough to provide aligned data buffer
             else {
-                info!("Handling word-aligned buffer");
+                // info!("Handling word-aligned buffer");
                 for i in (0..512).step_by(4) {
                     if (write) {
                         let bytes = u32::from_le_bytes(buffer[i..i + 4].try_into().unwrap());
