@@ -1,3 +1,4 @@
+// use super::libkernel::info;
 use crate::{
     bsp::{
         device_driver::PartitionEntry,
@@ -5,12 +6,13 @@ use crate::{
     },
     driver,
     exception::asynchronous::IRQNumber,
-    // synchronization,
+    println, synchronization,
     synchronization::IRQSafeNullLock,
 };
 use alloc::{string::String, vec::Vec};
 use postcard::from_bytes;
 use serde::Deserialize;
+
 #[allow(dead_code)]
 
 struct File {
@@ -20,32 +22,32 @@ struct File {
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
 
-struct BootSector {
+pub struct BootSector {
     asm_code: [u8; 3],
     oem: [u8; 8],
-    bytes_per_sec: u16,
+    bytes_per_sec: [u8; 2],
     sec_per_cluster: u8,
-    reserved_area_nsec: u16,
+    reserved_area_nsec: [u8; 2],
     nfats: u8,
-    max_files: u16,
-    fs_nsec: u16,
+    max_files: [u8; 2],
+    fs_nsec: [u8; 2],
     media_type: u8,
-    zero: u16,
-    sec_per_track: u16,
-    n_heads: u16,
-    hidden_secs: u32,
-    nsec_in_fs: u32,
-    nsec_per_fat: u32,
-    mirror_flags: u16,
-    version: u16,
-    first_cluster: u32,
-    info_sec_num: u16,
-    backup_boot_loc: u16,
+    zero: [u8; 2],
+    sec_per_track: [u8; 2],
+    n_heads: [u8; 2],
+    hidden_secs: [u8; 4],
+    nsec_in_fs: [u8; 4],
+    nsec_per_fat: [u8; 4],
+    mirror_flags: [u8; 2],
+    version: [u8; 2],
+    first_cluster: [u8; 4],
+    info_sec_num: [u8; 2],
+    backup_boot_loc: [u8; 2],
     _reserved: [u8; 12],
     logical_drive_num: u8,
     _reserved1: u8,
     extended_sig: u8,
-    serial_num: u32,
+    serial_num: [u8; 4],
     volume_label: [u8; 11],
     fs_type: [u8; 8],
     // Unfortunately serde::deserialize doesn't allow for arrays longer than this...
@@ -63,7 +65,7 @@ struct BootSector {
     _ignore_b: [u8; 32],
     _ignore_c: [u8; 32],
     _ignore_d: [u8; 4],
-    sig: u16,
+    sig: [u8; 2],
 }
 // a hacky static-assert for size of BootSector struct
 #[allow(dead_code)]
@@ -96,6 +98,7 @@ struct Fat32Inner {
     // pointer to in-memory copy of FAT: use a vector of bytes?
     fat: Vec<u8>,
     n_entries: u32,
+    boot_sec: BootSector,
 
     sd: &'static SD,
 }
@@ -106,25 +109,79 @@ struct Fat32Inner {
 // use bincode::deserialize;
 #[allow(dead_code)]
 
+pub fn arr_to_u32(arr: [u8; 4]) -> u32 {
+    let mut res = 0;
+    for i in 0..4 {
+        res += u32::try_from(arr[i]).unwrap() << (32 - (i * 8));
+    }
+    res
+}
+
+pub fn arr_to_u16(arr: [u8; 2]) -> u16 {
+    let mut res = 0;
+    for i in 0..2 {
+        res += u16::try_from(arr[i]).unwrap() << (16 - (i * 8));
+    }
+    res
+}
+
 impl Fat32Inner {
     pub fn new(partition: PartitionEntry, sd: &'static SD) -> Self {
         // need to use lba_start of partition to read in boot_sector.
+        // println!(
+        //     "FAT32_________: getting boot sector from lba: {}",
+        //     partition.mbr_get_lba_start()
+        // );
         let boot_sector_vec = sd.pi_sec_read(partition.mbr_get_lba_start(), 1).unwrap();
         // then need to "memcpy" this vec into BootSector type. Use `bincode` crate.
 
         // let boot_sec: BootSector = deserialize(&boot_sector_vec).unwrap();
-        let boot_sec: BootSector = from_bytes(&boot_sector_vec).unwrap();
+        println!(
+            "BootSector[10..13]:\t{}, {}, {}, {}",
+            boot_sector_vec[10], boot_sector_vec[11], boot_sector_vec[12], boot_sector_vec[13]
+        );
+        // problem: this is the wrong endianness...
+        let boot_sector_arr: [u8; 512] = boot_sector_vec.try_into().unwrap_or_else(|v: Vec<u8>| {
+            panic!("Expected a Vec of length {} but it was {}", 512, v.len());
+        });
+        let boot_sec: BootSector = from_bytes(&boot_sector_arr).unwrap();
+        println!("BootSector: {:#?}", boot_sec);
+        // println!("Boot_sec: bytes_per_sec: {}", boot_sec.bytes_per_sec);
         Self {
             lba_start: partition.mbr_get_lba_start(),
-            fat_begin_lba: 2,
-            clusters_begin_lba: 2
-                + (u32::try_from(boot_sec.nfats).unwrap()) * boot_sec.nsec_per_fat,
+            fat_begin_lba: partition.mbr_get_lba_start()
+                + (u32::try_from(boot_sec.reserved_area_nsec[0]).unwrap() << 8)
+                + u32::try_from(boot_sec.reserved_area_nsec[1]).unwrap(),
+            clusters_begin_lba: partition.mbr_get_lba_start()
+                + (u32::try_from(boot_sec.reserved_area_nsec[0]).unwrap() << 8)
+                + u32::try_from(boot_sec.reserved_area_nsec[1]).unwrap()
+                + (u32::try_from(boot_sec.nfats).unwrap()) * arr_to_u32(boot_sec.nsec_per_fat),
             sectors_per_cluster: u32::try_from(boot_sec.sec_per_cluster).unwrap(),
-            root_dir_first_cluster: boot_sec.first_cluster,
-            n_entries: boot_sec.nsec_per_fat * 512 / 4,
+            root_dir_first_cluster: arr_to_u32(boot_sec.first_cluster),
+            n_entries: arr_to_u32(boot_sec.nsec_per_fat) * 512 / 4,
             sd: &sd,
             fat: Vec::new(),
+            boot_sec: boot_sec,
         }
+    }
+
+    pub fn fat32_volume_id_check(&self) {
+        println!("Bytes per sec: {}", arr_to_u16(self.boot_sec.bytes_per_sec));
+        assert!(arr_to_u16(self.boot_sec.bytes_per_sec) == 512);
+        assert!(self.boot_sec.nfats == 2);
+        assert!(arr_to_u16(self.boot_sec.sig) == 0xAA55);
+
+        // TODO: replace check below with power-of-two check
+        assert!(self.boot_sec.sec_per_cluster % 2 == 0);
+
+        assert!(arr_to_u16(self.boot_sec.max_files) == 0);
+        assert!(arr_to_u16(self.boot_sec.fs_nsec) == 0);
+        assert!(arr_to_u16(self.boot_sec.zero) == 0);
+        assert!(arr_to_u32(self.boot_sec.nsec_in_fs) != 0);
+
+        assert!(arr_to_u16(self.boot_sec.info_sec_num) == 1);
+        assert!(arr_to_u16(self.boot_sec.backup_boot_loc) == 6);
+        assert!(self.boot_sec.extended_sig == 0x29);
     }
 }
 //--------------------------------------------------------------------------------------------------
@@ -142,22 +199,35 @@ pub struct Fat32 {
 #[allow(dead_code)]
 impl Fat32 {
     pub unsafe fn new() -> Result<Self, &'static str> {
+        println!("~~~~~~~~~~~~~~~~~~~~~~~~IN FAT32 CONSTRUCTOR~~~~~~~~~~~~~~~~~~~~~~~~~");
         let sd_driver = get_sd();
+        // have to call MBR constructor, presumably?
         let mbr = get_mbr();
-        sd_driver.pi_sd_init()?;
+        match sd_driver.pi_sd_init() {
+            Ok(()) => println!("SD Init successful"),
+            _ => panic!("Couldn't init SD"),
+        }
         let first_partition = mbr.mbr_get_partition(1);
+        println!(
+            "~~~~~~~PARTITION INFO~~~~~~~~~{}~~~~~~PARTITION INFO~~~~~~~~",
+            first_partition
+        );
         Ok(Self {
             inner: IRQSafeNullLock::new(Fat32Inner::new(first_partition, sd_driver)),
         })
     }
 
-    pub const COMPATIBLE: &'static str = "Fat32";
+    pub const COMPATIBLE: &'static str = "FAT32";
+
+    pub fn fat32_vol_id_check(&self) {
+        self.inner.lock(|inner| inner.fat32_volume_id_check())
+    }
 }
 
 //------------------------------------------------------------------------------
 // OS Interface Code
 //------------------------------------------------------------------------------
-// use synchronization::interface::Mutex;
+use synchronization::interface::Mutex;
 
 use super::SD;
 

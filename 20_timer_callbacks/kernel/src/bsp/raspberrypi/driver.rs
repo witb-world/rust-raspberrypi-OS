@@ -26,6 +26,7 @@ static mut GPIO: MaybeUninit<device_driver::GPIO> = MaybeUninit::uninit();
 static mut MBR: MaybeUninit<device_driver::MBR> = MaybeUninit::uninit();
 static mut EMMC_CONTROLLER: MaybeUninit<device_driver::EMMCController> = MaybeUninit::uninit();
 static mut SD: MaybeUninit<device_driver::SD> = MaybeUninit::uninit();
+static mut FAT32: MaybeUninit<device_driver::Fat32> = MaybeUninit::uninit();
 
 #[cfg(feature = "bsp_rpi3")]
 static mut INTERRUPT_CONTROLLER: MaybeUninit<device_driver::InterruptController> =
@@ -107,6 +108,16 @@ unsafe fn instantiate_mbr() -> Result<(), &'static str> {
 
 unsafe fn post_init_mbr() -> Result<(), &'static str> {
     MBR.assume_init_ref();
+    Ok(())
+}
+
+unsafe fn instantiate_fat32() -> Result<(), &'static str> {
+    FAT32.write(device_driver::Fat32::new()?);
+    Ok(())
+}
+
+unsafe fn post_init_fat32() -> Result<(), &'static str> {
+    FAT32.assume_init_ref();
     Ok(())
 }
 
@@ -215,6 +226,17 @@ unsafe fn driver_mbr() -> Result<(), &'static str> {
     Ok(())
 }
 
+unsafe fn driver_fat32() -> Result<(), &'static str> {
+    instantiate_fat32()?;
+    let fat32_descriptor = generic_driver::DeviceDriverDescriptor::new(
+        FAT32.assume_init_ref(),
+        Some(post_init_fat32),
+        None,
+    );
+    generic_driver::driver_manager().register_driver(fat32_descriptor);
+    Ok(())
+}
+
 /// Function needs to ensure that driver registration happens only after correct instantiation.
 unsafe fn driver_interrupt_controller() -> Result<(), &'static str> {
     instantiate_interrupt_controller()?;
@@ -250,6 +272,7 @@ pub unsafe fn init() -> Result<(), &'static str> {
     driver_emmc_controller()?;
     driver_sd()?;
     driver_mbr()?;
+    driver_fat32()?;
 
     INIT_DONE.store(true, Ordering::Relaxed);
     Ok(())
@@ -277,6 +300,11 @@ pub fn get_sd() -> &'static device_driver::SD {
 /// Return a reference to MBR driver
 pub fn get_mbr() -> &'static device_driver::MBR {
     unsafe { MBR.assume_init_ref() }
+}
+
+/// Return a reference to Fat32 driver
+pub fn get_fat32() -> &'static device_driver::Fat32 {
+    unsafe { FAT32.assume_init_ref() }
 }
 
 /// Minimal code needed to bring up the console in QEMU (for testing only). This is often less steps

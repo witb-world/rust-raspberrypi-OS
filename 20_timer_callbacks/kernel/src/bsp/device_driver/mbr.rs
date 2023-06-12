@@ -5,7 +5,7 @@ use core::{
 };
 
 use crate::{
-    bsp::driver::get_sd, driver, exception::asynchronous::IRQNumber, synchronization,
+    bsp::driver::get_sd, driver, exception::asynchronous::IRQNumber, println, synchronization,
     synchronization::IRQSafeNullLock,
 };
 use alloc::vec::Vec;
@@ -248,6 +248,7 @@ impl MBR {
         sd_driver.pi_sd_init()?;
         let boot_sector = sd_driver.pi_sec_read(0, 1).unwrap();
         assert!(boot_sector.len() == 512);
+        println!("MBR___________READY");
         Ok(Self {
             inner: IRQSafeNullLock::new(MBRInner::new(boot_sector)),
         })

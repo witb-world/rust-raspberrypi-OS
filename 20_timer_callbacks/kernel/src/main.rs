@@ -114,20 +114,25 @@ fn kernel_main() -> ! {
     //     _ => info!("Something went wrong during init"),
     // };
 
-    let part = mbr.mbr_get_partition(1);
+    // let part = mbr.mbr_get_partition(1);
 
-    info!("{}", part.mbr_partition_string());
-    info!(
-        "More partition data: nsec: {}\tpart_type: {}",
-        part.mbr_get_nsectors(),
-        part.mbr_get_parttype()
-    );
-    info!("Full partition: {}", part);
+    // info!("{}", part.mbr_partition_string());
+    // info!(
+    //     "More partition data: nsec: {}\tpart_type: {}",
+    //     part.mbr_get_nsectors(),
+    //     part.mbr_get_parttype()
+    // );
+    // info!("Full partition: {}", part);
 
-    info!("MBR sigval: {:x}", mbr.mbr_get_sigval());
+    // info!("MBR sigval: {:x}", mbr.mbr_get_sigval());
 
-    info!("MBR check output: {}", mbr.mbr_check());
+    // info!("MBR check output: {}", mbr.mbr_check());
 
+    let fat32 = bsp::driver::get_fat32();
+
+    info!("Checking Fat32 vol");
+    fat32.fat32_vol_id_check();
+    info!("Check succeeded!");
     // let buf = sd.pi_sec_read(0, 1).unwrap();
 
     // info!("Got sd card MBR contents. End of block: ");
