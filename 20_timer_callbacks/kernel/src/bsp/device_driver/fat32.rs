@@ -67,6 +67,7 @@ pub struct BootSector {
     _ignore_d: [u8; 4],
     sig: [u8; 2],
 }
+
 // a hacky static-assert for size of BootSector struct
 #[allow(dead_code)]
 const TEST_CHECKER: [u8; 512] = [0; core::mem::size_of::<BootSector>()];
@@ -98,6 +99,8 @@ struct Fat32Inner {
     // pointer to in-memory copy of FAT: use a vector of bytes?
     fat: Vec<u8>,
     n_entries: u32,
+
+    info: FSInfo,
     boot_sec: BootSector,
 
     sd: &'static SD,
@@ -107,12 +110,42 @@ struct Fat32Inner {
 // Private Code
 //--------------------------------------------------------------------------------------------------
 // use bincode::deserialize;
+
+// unline the struct above, we won't fill in `ignore` fields.
 #[allow(dead_code)]
+
+pub struct FSInfo {
+    sig1: u32,
+    sig2: u32,
+    free_cluster_count: u32,
+    next_free_cluster: u32,
+    sig3: u32,
+}
+
+impl FSInfo {
+    pub fn new(info_sector: Vec<u8>) -> Self {
+        Self {
+            sig1: sl_to_u32(&info_sector[0..4]),
+            sig2: sl_to_u32(&info_sector[484..488]),
+            free_cluster_count: sl_to_u32(&info_sector[488..492]),
+            next_free_cluster: sl_to_u32(&info_sector[492..496]),
+            sig3: sl_to_u32(&info_sector[508..512]),
+        }
+    }
+}
 
 pub fn arr_to_u32(arr: [u8; 4]) -> u32 {
     let mut res = 0;
     for i in 0..4 {
         res += u32::try_from(arr[i]).unwrap() << (32 - (i * 8));
+    }
+    res
+}
+
+pub fn sl_to_u32(sl: &[u8]) -> u32 {
+    let mut res = 0;
+    for i in 0..4 {
+        res += u32::try_from(sl[i]).unwrap() << (32 - (i * 8));
     }
     res
 }
@@ -128,40 +161,45 @@ pub fn arr_to_u16(arr: [u8; 2]) -> u16 {
 impl Fat32Inner {
     pub fn new(partition: PartitionEntry, sd: &'static SD) -> Self {
         // need to use lba_start of partition to read in boot_sector.
-        // println!(
-        //     "FAT32_________: getting boot sector from lba: {}",
-        //     partition.mbr_get_lba_start()
-        // );
-        let boot_sector_vec = sd.pi_sec_read(partition.mbr_get_lba_start(), 1).unwrap();
+        let lba_start = partition.mbr_get_lba_start();
+        let boot_sector_vec = sd.pi_sec_read(lba_start, 1).unwrap();
         // then need to "memcpy" this vec into BootSector type. Use `bincode` crate.
-
-        // let boot_sec: BootSector = deserialize(&boot_sector_vec).unwrap();
         println!(
             "BootSector[10..13]:\t{}, {}, {}, {}",
             boot_sector_vec[10], boot_sector_vec[11], boot_sector_vec[12], boot_sector_vec[13]
         );
-        // problem: this is the wrong endianness...
         let boot_sector_arr: [u8; 512] = boot_sector_vec.try_into().unwrap_or_else(|v: Vec<u8>| {
             panic!("Expected a Vec of length {} but it was {}", 512, v.len());
         });
         let boot_sec: BootSector = from_bytes(&boot_sector_arr).unwrap();
         println!("BootSector: {:#?}", boot_sec);
+        let if_sec_num = u32::try_from(arr_to_u16(boot_sec.info_sec_num)).unwrap();
+        let info = FSInfo::new(sd.pi_sec_read(if_sec_num, 1).unwrap());
         // println!("Boot_sec: bytes_per_sec: {}", boot_sec.bytes_per_sec);
+
+        let fat_begin_lba =
+            lba_start + u32::try_from(arr_to_u16(boot_sec.reserved_area_nsec)).unwrap();
+        let cluster_begin_lba = fat_begin_lba
+            + u32::try_from(boot_sec.nfats).unwrap() * arr_to_u32(boot_sec.nsec_per_fat);
+        let n_entries = arr_to_u32(boot_sec.nsec_per_fat) * 512 / 4;
+
+        let mut fat: Vec<u8> = Vec::new();
+        fat.resize(usize::try_from(n_entries).unwrap() * 4, 0);
+        fat = sd
+            .pi_sec_read(fat_begin_lba, arr_to_u32(boot_sec.nsec_per_fat))
+            .unwrap();
+
         Self {
-            lba_start: partition.mbr_get_lba_start(),
-            fat_begin_lba: partition.mbr_get_lba_start()
-                + (u32::try_from(boot_sec.reserved_area_nsec[0]).unwrap() << 8)
-                + u32::try_from(boot_sec.reserved_area_nsec[1]).unwrap(),
-            clusters_begin_lba: partition.mbr_get_lba_start()
-                + (u32::try_from(boot_sec.reserved_area_nsec[0]).unwrap() << 8)
-                + u32::try_from(boot_sec.reserved_area_nsec[1]).unwrap()
-                + (u32::try_from(boot_sec.nfats).unwrap()) * arr_to_u32(boot_sec.nsec_per_fat),
+            lba_start: lba_start,
+            fat_begin_lba: fat_begin_lba,
+            clusters_begin_lba: cluster_begin_lba,
             sectors_per_cluster: u32::try_from(boot_sec.sec_per_cluster).unwrap(),
             root_dir_first_cluster: arr_to_u32(boot_sec.first_cluster),
-            n_entries: arr_to_u32(boot_sec.nsec_per_fat) * 512 / 4,
+            n_entries: n_entries,
             sd: &sd,
-            fat: Vec::new(),
-            boot_sec: boot_sec,
+            fat: fat,
+            boot_sec,
+            info,
         }
     }
 
